@@ -2,7 +2,9 @@
 
 ## Install
 
-- TensorRT OSS Plugin: [github.com/hiennguyen9874/TensorRT](https://github.com/hiennguyen9874/TensorRT)
+- [TensorRT OSS Plugin](https://github.com/hiennguyen9874/TensorRT)
+
+- [onnx-graphsurgeon](https://github.com/NVIDIA/TensorRT/tree/main/tools/onnx-graphsurgeon)
 
 ## Export
 
