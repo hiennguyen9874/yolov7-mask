@@ -1,45 +1,15 @@
-# Official YOLOv7
+# Export Yolov7-mask to ONNX and tensorRT
 
-Implementation of paper - [YOLOv7: Trainable bag-of-freebies sets new state-of-the-art for real-time object detectors](https://arxiv.org/abs/2207.02696)
+## Install
 
-Instance segmentaion code is partially based on [BlendMask](https://arxiv.org/abs/2001.00309).
+- TensorRT OSS Plugin: [github.com/hiennguyen9874/TensorRT](https://github.com/hiennguyen9874/TensorRT)
 
-## Testing
+## Export to onnx
 
-[yolov7-mask.pt](https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-mask.pt)
+- `python3 export.py --weights weights/yolov7-mask.pt --img-size 640 640 --batch-size 1 --grid --end2end --max-wh 640 --simplify --mask --cleanup --topk-all 100 --iou-thres 0.65 --conf-thres 0.35`
 
-[[scripts]](./tools/instance.ipynb)
+## Export to tensorRT
 
-<div align="center">
-    <a href="./">
-        <img src="./figure/horses_instance.png" width="79%"/>
-    </a>
-</div>
+- `python3 export.py --weights weights/yolov7-mask.pt --img-size 640 640 --batch-size 1 --grid --end2end --max-wh 640 --simplify --mask --cleanup --topk-all 100 --iou-thres 0.65 --conf-thres 0.35 --trt`
 
-## Citation
-
-```
-@article{wang2022yolov7,
-  title={{YOLOv7}: Trainable bag-of-freebies sets new state-of-the-art for real-time object detectors},
-  author={Wang, Chien-Yao and Bochkovskiy, Alexey and Liao, Hong-Yuan Mark},
-  journal={arXiv preprint arXiv:2207.02696},
-  year={2022}
-}
-```
-
-## Acknowledgements
-
-<details><summary> <b>Expand</b> </summary>
-
-- [https://github.com/AlexeyAB/darknet](https://github.com/AlexeyAB/darknet)
-- [https://github.com/WongKinYiu/yolor](https://github.com/WongKinYiu/yolor)
-- [https://github.com/WongKinYiu/PyTorch_YOLOv4](https://github.com/WongKinYiu/PyTorch_YOLOv4)
-- [https://github.com/WongKinYiu/ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)
-- [https://github.com/Megvii-BaseDetection/YOLOX](https://github.com/Megvii-BaseDetection/YOLOX)
-- [https://github.com/ultralytics/yolov3](https://github.com/ultralytics/yolov3)
-- [https://github.com/ultralytics/yolov5](https://github.com/ultralytics/yolov5)
-- [https://github.com/DingXiaoH/RepVGG](https://github.com/DingXiaoH/RepVGG)
-- [https://github.com/JUGGHM/OREPA_CVPR2022](https://github.com/JUGGHM/OREPA_CVPR2022)
-- [https://github.com/TexasInstruments/edgeai-yolov5/tree/yolo-pose](https://github.com/TexasInstruments/edgeai-yolov5/tree/yolo-pose)
-
-</details>
+- `CUDA_VISIBLE_DEVICES=1 /usr/src/tensorrt/bin/trtexec --onnx=./weights/yolov7-mask.onnx --saveEngine=./weights/yolov7-mask-nms.trt --workspace=8192 --fp16 --minShapes=images:1x3x640x640 --optShapes=images:1x3x640x640 --maxShapes=images:16x3x640x640 --shapes=images:1x3x640x640`
