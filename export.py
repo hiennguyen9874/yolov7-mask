@@ -54,7 +54,13 @@ if __name__ == "__main__":
         action="store_true",
         help="True for using onnx_graphsurgeon to sort and remove unused",
     )
+    parser.add_argument("--attn-resolution", type=int, default=14, help="attn-resolution")
+    parser.add_argument("--mask-resolution", type=int, default=56, help="mask-resolution")
+    parser.add_argument("--num-base", type=int, default=5, help="num-base")
+    parser.add_argument("--pooler-scale", type=float, default=0.25, help="pooler-scale")
+
     opt = parser.parse_args()
+
     opt.img_size *= 2 if len(opt.img_size) == 1 else 1  # expand
     opt.dynamic = opt.dynamic and not opt.end2end
     opt.dynamic = False if opt.dynamic_batch else opt.dynamic
@@ -193,6 +199,10 @@ if __name__ == "__main__":
                     opt.max_wh,
                     device,
                     trt=opt.trt,
+                    attn_resolution=opt.attn_resolution,
+                    mask_resolution=opt.mask_resolution,
+                    num_base=opt.num_base,
+                    pooler_scale=opt.pooler_scale,
                 )
             else:
                 model = End2End(
@@ -227,7 +237,7 @@ if __name__ == "__main__":
                         56 * 56,
                         # 14 * 14,
                     ]
-                    # output_names = ["output"]
+                    # output_names = ["output", "num_det", "obj_idxs"]
                 else:
                     output_names = ["output"]
             elif opt.end2end and opt.max_wh is None:
@@ -265,7 +275,7 @@ if __name__ == "__main__":
     onnx.checker.check_model(onnx_model)  # check onnx model
 
     if (opt.mask and opt.trt) or (opt.end2end and opt.max_wh is None):
-        # if opt.end2end and opt.max_wh is None:
+    # if opt.end2end and opt.max_wh is None:
         for i in onnx_model.graph.output:
             for j in i.type.tensor_type.shape.dim:
                 j.dim_param = str(shapes.pop(0))
