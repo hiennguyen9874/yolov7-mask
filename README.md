@@ -27,3 +27,7 @@
 ### TensorRT
 
 [[scripts]](./tools/YOLOv7trt_mask.ipynb)
+
+
+## Deepstream
+[github.com/hiennguyen9874/deepstream-yolov7-mask](https://github.com/hiennguyen9874/deepstream-yolov7-mask)
