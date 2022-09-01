@@ -390,7 +390,7 @@ class ONNX_ORT_MASK(nn.Module):
             self.mask_resolution,
             self.mask_resolution,
             1,
-            pooler_scale,
+            self.pooler_scale,
         )
 
         X = X.unsqueeze(1).float()
