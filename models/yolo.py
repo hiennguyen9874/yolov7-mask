@@ -74,7 +74,7 @@ class Detect(nn.Module):
                     )  # new xy
                     wh = wh**2 * (4 * self.anchor_grid[i].data)  # new wh
                     y = torch.cat((xy, wh, conf), 4)
-                z.append(y.view(bs, -1, self.no))
+                z.append(y.view(bs, self.na * ny * nx, self.no))
 
         if self.training:
             out = x
@@ -151,7 +151,7 @@ class IDetect(nn.Module):
                 y = x[i].sigmoid()
                 y[..., 0:2] = (y[..., 0:2] * 2.0 - 0.5 + self.grid[i]) * self.stride[i]  # xy
                 y[..., 2:4] = (y[..., 2:4] * 2) ** 2 * self.anchor_grid[i]  # wh
-                z.append(y.view(bs, -1, self.no))
+                z.append(y.view(bs, self.na * ny * nx, self.no))
 
         return x if self.training else (torch.cat(z, 1), x)
 
@@ -181,7 +181,7 @@ class IDetect(nn.Module):
                     )  # new xy
                     wh = wh**2 * (4 * self.anchor_grid[i].data)  # new wh
                     y = torch.cat((xy, wh, conf), 4)
-                z.append(y.view(bs, -1, self.no))
+                z.append(y.view(bs, self.na * ny * nx, self.no))
 
         if self.training:
             out = x
@@ -354,7 +354,7 @@ class IKeypoint(nn.Module):
                         ]  # xy
                     y = torch.cat((xy, wh, y[..., 4:]), -1)
 
-                z.append(y.view(bs, -1, self.no))
+                z.append(y.view(bs, self.na * ny * nx, self.no))
 
         return x if self.training else (torch.cat(z, 1), x)
 
@@ -445,7 +445,7 @@ class MT(nn.Module):
                     )  # new xy
                     wh = wh**2 * (4 * self.anchor_grid[i].data)  # new wh
                     y = torch.cat((xy, wh, conf), 4)
-                z.append(y.view(bs, -1, self.no))
+                z.append(y.view(bs, self.na * ny * nx, self.no))
 
         output["mask_iou"] = None
         if not self.training:
@@ -544,7 +544,7 @@ class IAuxDetect(nn.Module):
                     )  # new xy
                     wh = wh**2 * (4 * self.anchor_grid[i].data)  # new wh
                     y = torch.cat((xy, wh, conf), 4)
-                z.append(y.view(bs, -1, self.no))
+                z.append(y.view(bs, self.na * ny * nx, self.no))
 
         return x if self.training else (torch.cat(z, 1), x[: self.nl])
 
@@ -569,7 +569,7 @@ class IAuxDetect(nn.Module):
                     xy = (y[..., 0:2] * 2.0 - 0.5 + self.grid[i]) * self.stride[i]  # xy
                     wh = (y[..., 2:4] * 2) ** 2 * self.anchor_grid[i].data  # wh
                     y = torch.cat((xy, wh, y[..., 4:]), -1)
-                z.append(y.view(bs, -1, self.no))
+                z.append(y.view(bs, self.na * ny * nx, self.no))
 
         if self.training:
             out = x

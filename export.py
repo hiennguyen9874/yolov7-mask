@@ -57,7 +57,8 @@ if __name__ == "__main__":
     parser.add_argument("--attn-resolution", type=int, default=14, help="attn-resolution")
     parser.add_argument("--mask-resolution", type=int, default=56, help="mask-resolution")
     parser.add_argument("--num-base", type=int, default=5, help="num-base")
-    parser.add_argument("--pooler-scale", type=float, default=0.25, help="pooler-scale")
+    parser.add_argument("--pooler-scale", type=float, default=0.25, help="RoiAlign: scale")
+    parser.add_argument("--sampling-ratio", type=int, default=0, help="RoiAlign: sampling-ratio")
 
     opt = parser.parse_args()
 
@@ -98,58 +99,6 @@ if __name__ == "__main__":
         model.model[-1].include_nms = True
         y = None
 
-    # # TorchScript export
-    # try:
-    #     print("\nStarting TorchScript export with torch %s..." % torch.__version__)
-    #     f = opt.weights.replace(".pt", ".torchscript.pt")  # filename
-    #     ts = torch.jit.trace(model, img, strict=False)
-    #     ts.save(f)
-    #     print("TorchScript export success, saved as %s" % f)
-    # except Exception as e:
-    #     print("TorchScript export failure: %s" % e)
-
-    # # CoreML export
-    # try:
-    #     import coremltools as ct
-
-    #     print("\nStarting CoreML export with coremltools %s..." % ct.__version__)
-    #     # convert model from torchscript and apply pixel scaling as per detect.py
-    #     ct_model = ct.convert(
-    #         ts, inputs=[ct.ImageType("image", shape=img.shape, scale=1 / 255.0, bias=[0, 0, 0])]
-    #     )
-    #     bits, mode = (8, "kmeans_lut") if opt.int8 else (16, "linear") if opt.fp16 else (32, None)
-    #     if bits < 32:
-    #         if sys.platform.lower() == "darwin":  # quantization only supported on macOS
-    #             with warnings.catch_warnings():
-    #                 warnings.filterwarnings(
-    #                     "ignore", category=DeprecationWarning
-    #                 )  # suppress numpy==1.20 float warning
-    #                 ct_model = ct.models.neural_network.quantization_utils.quantize_weights(
-    #                     ct_model, bits, mode
-    #                 )
-    #         else:
-    #             print("quantization only supported on macOS, skipping...")
-
-    #     f = opt.weights.replace(".pt", ".mlmodel")  # filename
-    #     ct_model.save(f)
-    #     print("CoreML export success, saved as %s" % f)
-    # except Exception as e:
-    #     print("CoreML export failure: %s" % e)
-
-    # # TorchScript-Lite export
-    # try:
-    #     print("\nStarting TorchScript-Lite export with torch %s..." % torch.__version__)
-    #     f = opt.weights.replace(".pt", ".torchscript.ptl")  # filename
-    #     tsl = torch.jit.trace(model, img, strict=False)
-    #     tsl = optimize_for_mobile(tsl)
-    #     tsl._save_for_lite_interpreter(f)
-    #     print("TorchScript-Lite export success, saved as %s" % f)
-    # except Exception as e:
-    #     print("TorchScript-Lite export failure: %s" % e)
-
-    # # ONNX export
-    # try:
-
     import onnx
 
     print("\nStarting ONNX export with onnx %s..." % onnx.__version__)
@@ -157,11 +106,13 @@ if __name__ == "__main__":
     model.eval()
     output_names = ["classes", "boxes"] if y is None else ["output"]
     dynamic_axes = None
+
     if opt.dynamic:
         dynamic_axes = {
             "images": {0: "batch", 2: "height", 3: "width"},  # size(1,3,640,640)
             "output": {0: "batch", 2: "y", 3: "x"},
         }
+
     if opt.dynamic_batch:
         opt.batch_size = "batch"
         dynamic_axes = {
@@ -217,8 +168,6 @@ if __name__ == "__main__":
                         "det_scores",
                         "det_classes",
                         "det_mask",
-                        # "det_attn",
-                        # "bases"
                     ]
                     shapes = [
                         opt.batch_size,
@@ -234,10 +183,8 @@ if __name__ == "__main__":
                         1,
                         opt.batch_size,
                         opt.topk_all,
-                        56 * 56,
-                        # 14 * 14,
+                        opt.mask_resolution * opt.mask_resolution,
                     ]
-                    # output_names = ["output", "num_det", "obj_idxs"]
                 else:
                     output_names = ["output"]
             elif opt.end2end and opt.max_wh is None:
@@ -275,7 +222,6 @@ if __name__ == "__main__":
     onnx.checker.check_model(onnx_model)  # check onnx model
 
     if (opt.mask and opt.trt) or (opt.end2end and opt.max_wh is None):
-    # if opt.end2end and opt.max_wh is None:
         for i in onnx_model.graph.output:
             for j in i.type.tensor_type.shape.dim:
                 j.dim_param = str(shapes.pop(0))

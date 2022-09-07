@@ -138,12 +138,11 @@ class TRT_NMS(torch.autograd.Function):
         boxes,
         scores,
         background_class=-1,
-        box_coding=1,
         iou_threshold=0.45,
         max_output_boxes=100,
-        plugin_version="1",
         score_activation=0,
         score_threshold=0.25,
+        box_coding=1,
     ):
         batch_size, num_boxes, num_classes = scores.shape
         num_det = torch.randint(0, max_output_boxes, (batch_size, 1), dtype=torch.int32)
@@ -160,12 +159,11 @@ class TRT_NMS(torch.autograd.Function):
         boxes,
         scores,
         background_class=-1,
-        box_coding=1,
         iou_threshold=0.45,
         max_output_boxes=100,
-        plugin_version="1",
         score_activation=0,
         score_threshold=0.25,
+        box_coding=1,
     ):
         out = g.op(
             "TRT::EfficientNMS_TRT",
@@ -175,10 +173,8 @@ class TRT_NMS(torch.autograd.Function):
             box_coding_i=box_coding,
             iou_threshold_f=iou_threshold,
             max_output_boxes_i=max_output_boxes,
-            plugin_version_s=plugin_version,
             score_activation_i=score_activation,
             score_threshold_f=score_threshold,
-            outputs=4,
         )
         nums, boxes, scores, classes = out
         return nums, boxes, scores, classes
@@ -190,14 +186,22 @@ class ONNX_ORT(nn.Module):
     def __init__(self, max_obj=100, iou_thres=0.45, score_thres=0.25, max_wh=640, device=None):
         super().__init__()
         self.device = device if device else torch.device("cpu")
-        self.max_obj = torch.tensor([max_obj]).to(device)
-        self.iou_threshold = torch.tensor([iou_thres]).to(device)
-        self.score_threshold = torch.tensor([score_thres]).to(device)
         self.max_wh = max_wh  # if max_wh != 0 : non-agnostic else : agnostic
-        self.convert_matrix = torch.tensor(
-            [[1, 0, 1, 0], [0, 1, 0, 1], [-0.5, 0, 0.5, 0], [0, -0.5, 0, 0.5]],
-            dtype=torch.float32,
-            device=self.device,
+
+        self.register_buffer("max_obj", torch.tensor([max_obj]))
+        self.register_buffer("iou_threshold", torch.tensor([iou_thres]))
+        self.register_buffer("score_threshold", torch.tensor([score_thres]))
+        self.register_buffer(
+            "convert_matrix",
+            torch.tensor(
+                [
+                    [1, 0, 1, 0],
+                    [0, 1, 0, 1],
+                    [-0.5, 0, 0.5, 0],
+                    [0, -0.5, 0, 0.5],
+                ],
+                dtype=torch.float32,
+            ),
         )
 
     def forward(self, x):
@@ -229,10 +233,8 @@ class ONNX_TRT(nn.Module):
         assert max_wh is None
         self.device = device if device else torch.device("cpu")
         self.background_class = (-1,)
-        self.box_coding = (1,)
         self.iou_threshold = iou_thres
         self.max_obj = max_obj
-        self.plugin_version = "1"
         self.score_activation = 0
         self.score_threshold = score_thres
 
@@ -245,10 +247,8 @@ class ONNX_TRT(nn.Module):
             boxes,
             scores,
             self.background_class,
-            self.box_coding,
             self.iou_threshold,
             self.max_obj,
-            self.plugin_version,
             self.score_activation,
             self.score_threshold,
         )
@@ -285,12 +285,12 @@ class ORT_RoiAlign(torch.autograd.Function):
         X,
         rois,
         batch_indices,
-        # coordinate_transformation_mode="output_half_pixel",
-        mode="avg",
         output_height=56,
         output_width=56,
         sampling_ratio=1,
         spatial_scale=0.25,
+        # coordinate_transformation_mode="output_half_pixel",
+        mode="avg",
     ):
         N, C, H, W = X.shape
         num_rois = rois.shape[0]
@@ -302,12 +302,12 @@ class ORT_RoiAlign(torch.autograd.Function):
         X,
         rois,
         batch_indices,
-        # coordinate_transformation_mode,
-        mode,
         output_height,
         output_width,
         sampling_ratio,
         spatial_scale,
+        # coordinate_transformation_mode="output_half_pixel",
+        mode="avg",
     ):
         return g.op(
             "RoiAlign",
@@ -336,25 +336,33 @@ class ONNX_ORT_MASK(nn.Module):
         mask_resolution=56,
         num_base=5,
         pooler_scale=0.25,
+        sampling_ratio=0,
         device=None,
     ):
         super().__init__()
         self.device = device if device else torch.device("cpu")
-        self.max_obj = torch.tensor([max_obj]).to(device)
-        self.iou_threshold = torch.tensor([iou_thres]).to(device)
-        self.score_threshold = torch.tensor([score_thres]).to(device)
         self.max_wh = max_wh  # if max_wh != 0 : non-agnostic else : agnostic
-
-        self.convert_matrix = torch.tensor(
-            [[1, 0, 1, 0], [0, 1, 0, 1], [-0.5, 0, 0.5, 0], [0, -0.5, 0, 0.5]],
-            dtype=torch.float32,
-            device=self.device,
-        )
-
         self.attn_resolution = attn_resolution
         self.mask_resolution = mask_resolution
         self.num_base = num_base
         self.pooler_scale = pooler_scale
+        self.sampling_ratio = sampling_ratio
+
+        self.register_buffer("max_obj", torch.tensor([max_obj]))
+        self.register_buffer("iou_threshold", torch.tensor([iou_thres]))
+        self.register_buffer("score_threshold", torch.tensor([score_thres]))
+        self.register_buffer(
+            "convert_matrix",
+            torch.tensor(
+                [
+                    [1, 0, 1, 0],
+                    [0, 1, 0, 1],
+                    [-0.5, 0, 0.5, 0],
+                    [0, -0.5, 0, 0.5],
+                ],
+                dtype=torch.float32,
+            ),
+        )
 
     def forward(self, x):
         boxes = x[0][:, :, :4]
@@ -375,6 +383,7 @@ class ONNX_ORT_MASK(nn.Module):
             self.iou_threshold,
             self.score_threshold,
         )
+        total_object = selected_indices.shape[0]
         X, Y = selected_indices[:, 0], selected_indices[:, 2]
         selected_boxes = boxes[X, Y, :]
         selected_categories = category_id[X, Y, :].float()
@@ -385,18 +394,16 @@ class ONNX_ORT_MASK(nn.Module):
             bases,
             selected_boxes,
             X,
-            # "output_half_pixel",
-            "avg",
             self.mask_resolution,
             self.mask_resolution,
-            1,
+            self.sampling_ratio,
             self.pooler_scale,
         )
 
         X = X.unsqueeze(1).float()
 
         selected_attn = selected_attn.view(
-            -1, self.num_base, self.attn_resolution, self.attn_resolution
+            total_object, self.num_base, self.attn_resolution, self.attn_resolution
         )
         selected_attn = F.interpolate(
             selected_attn, (self.mask_resolution, self.mask_resolution), mode="bilinear"
@@ -404,11 +411,10 @@ class ONNX_ORT_MASK(nn.Module):
         masks_preds = (
             (pooled_bases * selected_attn)
             .sum(dim=1)
-            .view(-1, self.mask_resolution * self.mask_resolution)
+            .view(total_object, self.mask_resolution * self.mask_resolution)
             .sigmoid()
         )
         return torch.cat([X, selected_boxes, selected_categories, selected_scores, masks_preds], 1)
-        # return torch.cat([X, selected_boxes, selected_categories, selected_scores], 1)
 
 
 class TRT_NMS2(torch.autograd.Function):
@@ -422,7 +428,6 @@ class TRT_NMS2(torch.autograd.Function):
         score_threshold=0.25,
         iou_threshold=0.45,
         max_output_boxes_per_class=100,
-        plugin_version="1",
     ):
         device = boxes.device
         batch = scores.shape[0]
@@ -433,7 +438,7 @@ class TRT_NMS2(torch.autograd.Function):
         selected_indices = torch.cat([batches[None], zeros[None], idxs[None]], 0).T.contiguous()
         selected_indices = selected_indices.to(torch.int64)
         return_selected_indices = torch.zeros(
-            (batch * max_output_boxes_per_class, 3), dtype=torch.int64
+            (batch * max_output_boxes_per_class, 3), dtype=torch.int64, device=device
         )
         return_selected_indices[: selected_indices.shape[0]] = selected_indices
         return return_selected_indices
@@ -446,7 +451,6 @@ class TRT_NMS2(torch.autograd.Function):
         score_threshold=0.25,
         iou_threshold=0.45,
         max_output_boxes_per_class=100,
-        plugin_version="1",
     ):
         return g.op(
             "TRT::EfficientNMS_ONNX_TRT",
@@ -456,8 +460,6 @@ class TRT_NMS2(torch.autograd.Function):
             iou_threshold_f=iou_threshold,
             max_output_boxes_per_class_i=max_output_boxes_per_class,
             center_point_box_i=0,
-            plugin_version_s=plugin_version,
-            outputs=1,
         )
 
 
@@ -482,7 +484,7 @@ class TRT_NMS3(torch.autograd.Function):
         selected_indices = torch.cat([batches[None], zeros[None], idxs[None]], 0).T.contiguous()
         selected_indices = selected_indices.to(torch.int64)
         return_selected_indices = torch.zeros(
-            (batch * max_output_boxes_per_class, 3), dtype=torch.int64
+            (batch * max_output_boxes_per_class, 3), dtype=torch.int64, device=device
         )
         return_selected_indices[: selected_indices.shape[0]] = selected_indices
         return return_selected_indices
@@ -518,9 +520,8 @@ class TRT_RoiAlign(torch.autograd.Function):
         output_width=56,
         spatial_scale=0.25,
         sampling_ratio=1,
-        mode="avg",
         aligned=1,
-        plugin_version="1",
+        mode="avg",
     ):
         N, C, H, W = X.shape
         num_rois = rois.shape[0]
@@ -535,9 +536,8 @@ class TRT_RoiAlign(torch.autograd.Function):
         output_width,
         spatial_scale,
         sampling_ratio,
-        mode,
-        aligned,
-        plugin_version="1",
+        aligned=1,
+        mode="avg",
     ):
         return g.op(
             "TRT::RoIAlignDynamic",
@@ -549,21 +549,7 @@ class TRT_RoiAlign(torch.autograd.Function):
             sampling_ratio_i=sampling_ratio,
             mode_s=mode,
             aligned_i=aligned,
-            plugin_version_s=plugin_version,
-            outputs=1,
         )
-
-
-class Split(torch.autograd.Function):
-    """Split"""
-
-    @staticmethod
-    def forward(ctx, input, split, axis=0):
-        return torch.split(input, split[0], dim=axis)
-
-    @staticmethod
-    def symbolic(g, input, split, axis=0):
-        return g.op("Split", input, split, axis_i=axis)
 
 
 class ONNX_TRT_MASK(nn.Module):
@@ -579,33 +565,41 @@ class ONNX_TRT_MASK(nn.Module):
         mask_resolution=56,
         num_base=5,
         pooler_scale=0.25,
+        sampling_ratio=0,
         device=None,
     ):
         super().__init__()
         assert max_wh is not None
         self.device = device if device else torch.device("cpu")
-        self.max_wh = max_wh  # if max_wh != 0 : non-agnostic else : agnostic
+        self.max_wh = max_wh
         self.max_obj_i = max_obj
-
-        # self.iou_threshold = iou_thres
-        # self.score_threshold = score_thres
-        # self.plugin_version = "1"
-        self.register_buffer("max_obj", torch.tensor([max_obj]))
-        self.register_buffer("iou_threshold", torch.tensor([iou_thres]))
-        self.register_buffer("score_threshold", torch.tensor([score_thres]))
-        # self.register_buffer("eps", torch.tensor([1e-6]))
-        self.register_buffer(
-            "convert_matrix",
-            torch.tensor(
-                [[1, 0, 1, 0], [0, 1, 0, 1], [-0.5, 0, 0.5, 0], [0, -0.5, 0, 0.5]],
-                dtype=torch.float32,
-            ),
-        )
-
         self.attn_resolution = attn_resolution
         self.mask_resolution = mask_resolution
         self.num_base = num_base
         self.pooler_scale = pooler_scale
+        self.sampling_ratio = sampling_ratio
+
+        # For EfficientNMS_ONNX_TRT
+        # self.iou_threshold = iou_thres
+        # self.score_threshold = score_thres
+
+        # For NonMaxSuppression
+        self.register_buffer("max_obj", torch.tensor([max_obj]))
+        self.register_buffer("iou_threshold", torch.tensor([iou_thres]))
+        self.register_buffer("score_threshold", torch.tensor([score_thres]))
+
+        self.register_buffer(
+            "convert_matrix",
+            torch.tensor(
+                [
+                    [1, 0, 1, 0],
+                    [0, 1, 0, 1],
+                    [-0.5, 0, 0.5, 0],
+                    [0, -0.5, 0, 0.5],
+                ],
+                dtype=torch.float32,
+            ),
+        )
 
     def forward(self, x):
         boxes = x[0][:, :, :4]
@@ -613,6 +607,9 @@ class ONNX_TRT_MASK(nn.Module):
         scores = x[0][:, :, 5:]
         attn = x[1]
         bases = x[2]
+
+        batch_size = boxes.shape[0]
+
         scores *= conf
         boxes @= self.convert_matrix
         max_score, category_id = scores.max(2, keepdim=True)
@@ -635,45 +632,9 @@ class ONNX_TRT_MASK(nn.Module):
         #     self.score_threshold,
         #     self.iou_threshold,
         #     self.max_obj,
-        #     self.plugin_version,
         # ).to(torch.long)
 
-        # If sum(axis=1) is zero
-        num_object1 = (
-            torch.topk(
-                torch.where(
-                    selected_indices.sum(dim=1) > 0,
-                    torch.arange(
-                        0, selected_indices.shape[0], 1, device=self.device, dtype=torch.int32
-                    ),
-                    torch.zeros(selected_indices.shape[0], device=self.device, dtype=torch.int32),
-                ).to(torch.float),
-                k=1,
-                largest=True,
-            )[1]
-            + 1
-        )
-
-        # Check lag not change
-        selected_indices_lag = (selected_indices[1:] - selected_indices[:-1]).sum(dim=1)
-        num_object2 = (
-            torch.topk(
-                torch.where(
-                    selected_indices_lag != 0,
-                    torch.arange(
-                        0, selected_indices.shape[0] - 1, device=self.device, dtype=torch.int32
-                    ),
-                    torch.zeros((1,), device=self.device, dtype=torch.int32),
-                ).to(torch.float),
-                k=1,
-                largest=True,
-            )[1]
-            + 2
-        ).reshape((1,))
-
-        num_object = (selected_indices_lag.sum() != 0).to(torch.float32) * torch.min(
-            num_object1, num_object2
-        )
+        total_object = selected_indices.shape[0]
 
         # TODO: split dynamic size not work in tensorRT
         # selected_indices = torch.split(selected_indices, num_object)[0]
@@ -693,14 +654,11 @@ class ONNX_TRT_MASK(nn.Module):
             self.mask_resolution,
             self.mask_resolution,
             self.pooler_scale,
-            1,
-            "avg",
-            1,
-            "1",
+            self.sampling_ratio,
         )
 
         selected_attn = selected_attn.view(
-            -1, self.num_base, self.attn_resolution, self.attn_resolution
+            total_object, self.num_base, self.attn_resolution, self.attn_resolution
         )
         selected_attn = F.interpolate(
             selected_attn, (self.mask_resolution, self.mask_resolution), mode="bilinear"
@@ -708,19 +666,50 @@ class ONNX_TRT_MASK(nn.Module):
         masks_preds = (
             (pooled_bases * selected_attn)
             .sum(dim=1)
-            .view(-1, self.mask_resolution * self.mask_resolution)
+            .view(total_object, self.mask_resolution * self.mask_resolution)
             .sigmoid()
+        )
+
+        # If sum(axis=1) is zero
+        num_object1 = (
+            torch.topk(
+                torch.where(
+                    selected_indices.sum(dim=1) > 0,
+                    torch.arange(0, total_object, 1, device=self.device, dtype=torch.int32),
+                    torch.zeros(total_object, device=self.device, dtype=torch.int32),
+                ).to(torch.float),
+                k=1,
+                largest=True,
+            )[1]
+            + 1
+        ).reshape((1,))
+
+        # Check lag not change
+        selected_indices_lag = (selected_indices[1:] - selected_indices[:-1]).sum(dim=1)
+        num_object2 = (
+            torch.topk(
+                torch.where(
+                    selected_indices_lag != 0,
+                    torch.arange(0, total_object - 1, device=self.device, dtype=torch.int32),
+                    torch.zeros((1,), device=self.device, dtype=torch.int32),
+                ).to(torch.float),
+                k=1,
+                largest=True,
+            )[1]
+            + 2
+        ).reshape((1,))
+
+        num_object = (selected_indices_lag.sum() != 0).to(torch.float32) * torch.min(
+            num_object1, num_object2
         )
 
         batch_indices_per_batch = torch.where(
             (
                 X.unsqueeze(dim=1)
-                == torch.arange(0, boxes.shape[0], dtype=X.dtype, device=self.device).unsqueeze(
-                    dim=0
-                )
+                == torch.arange(0, batch_size, dtype=X.dtype, device=self.device).unsqueeze(dim=0)
             )
             & torch.where(
-                torch.arange(0, X.shape[0], device=self.device, dtype=torch.int32) < num_object,
+                torch.arange(0, total_object, device=self.device, dtype=torch.int32) < num_object,
                 torch.ones((1,), device=self.device, dtype=torch.int32),
                 torch.zeros((1,), device=self.device, dtype=torch.int32),
             )
@@ -730,12 +719,42 @@ class ONNX_TRT_MASK(nn.Module):
             torch.zeros((1,), device=self.device, dtype=torch.int32),
         )
 
-        num_det = batch_indices_per_batch.sum(dim=0).view(boxes.shape[0], 1).to(torch.int32)
+        num_det = batch_indices_per_batch.sum(dim=0).view(batch_size, 1).to(torch.int32)
+
+        # TODO: Not working in deepstream
+        # obj_idxs = (
+        #     torch.cumsum((batch_indices_per_batch).float(), axis=0) * batch_indices_per_batch
+        # ).sum(dim=1).to(torch.long) - 1
+
+        # det_boxes = torch.zeros(
+        #     (batch_size, self.max_obj_i, 4), device=self.device, dtype=torch.float32
+        # )
+        # det_scores = torch.zeros(
+        #     (batch_size, self.max_obj_i, 1), device=self.device, dtype=torch.float32
+        # )
+        # det_classes = torch.zeros(
+        #     (batch_size, self.max_obj_i, 1), device=self.device, dtype=torch.float32
+        # )
+        # det_mask = torch.zeros(
+        #     (batch_size, self.max_obj_i, self.mask_resolution * self.mask_resolution),
+        #     device=self.device,
+        #     dtype=torch.float32,
+        # )
+        # det_attn = torch.zeros(
+        #     (batch_size, self.max_obj_i, self.num_base * self.attn_resolution * self.attn_resolution), device=self.device, dtype=torch.float32
+        # )
+
+        # det_boxes[X, obj_idxs] = selected_boxes.to(torch.float32)
+        # det_scores[X, obj_idxs] = selected_scores.to(torch.float32)
+        # det_classes[X, obj_idxs] = selected_categories.to(torch.float32)
+        # det_mask[X, obj_idxs] = masks_preds.to(torch.float32)
+        # det_attn[X, obj_idxs] = selected_attn
+        # return num_det.to(torch.int32), det_boxes, det_scores, det_classes, det_attn, bases
 
         idxs = (
             torch.topk(
                 batch_indices_per_batch.to(torch.float32)
-                * torch.arange(0, X.shape[0], dtype=torch.int32, device=self.device).unsqueeze(
+                * torch.arange(0, total_object, dtype=torch.int32, device=self.device).unsqueeze(
                     dim=1
                 ),
                 k=self.max_obj_i,
@@ -748,49 +767,18 @@ class ONNX_TRT_MASK(nn.Module):
             .view(-1)
             .to(torch.long)
         )
-        # print(idxs)
 
-        # obj_idxs = (
-        #     torch.cumsum((batch_indices_per_batch).float(), axis=0) * batch_indices_per_batch
-        # ).sum(dim=1).to(torch.long) - 1
-
-        # det_boxes = torch.zeros(
-        #     (boxes.shape[0], self.max_obj_i, 4), device=self.device, dtype=torch.float32
-        # )
-        # det_scores = torch.zeros(
-        #     (boxes.shape[0], self.max_obj_i, 1), device=self.device, dtype=torch.float32
-        # )
-        # det_classes = torch.zeros(
-        #     (boxes.shape[0], self.max_obj_i, 1), device=self.device, dtype=torch.float32
-        # )
-        # det_mask = torch.zeros(
-        #     (boxes.shape[0], self.max_obj_i, self.mask_resolution * self.mask_resolution),
-        #     device=self.device,
-        #     dtype=torch.float32,
-        # )
-        # det_attn = torch.zeros(
-        #     (boxes.shape[0], self.max_obj_i, self.num_base * self.attn_resolution * self.attn_resolution), device=self.device, dtype=torch.float32
-        # )
-
-        # TODO: Not working in deepstream
-        # det_boxes[X, obj_idxs] = selected_boxes.to(torch.float32)
-        # det_scores[X, obj_idxs] = selected_scores.to(torch.float32)
-        # det_classes[X, obj_idxs] = selected_categories.to(torch.float32)
-        # det_mask[X, obj_idxs] = masks_preds.to(torch.float32)
-
-        det_boxes = selected_boxes[idxs].view(boxes.shape[0], self.max_obj_i, 4).to(torch.float32)
-        det_scores = selected_scores[idxs].view(boxes.shape[0], self.max_obj_i, 1).to(torch.float32)
+        det_boxes = selected_boxes[idxs].view(batch_size, self.max_obj_i, 4).to(torch.float32)
+        det_scores = selected_scores[idxs].view(batch_size, self.max_obj_i, 1).to(torch.float32)
         det_classes = (
-            selected_categories[idxs].view(boxes.shape[0], self.max_obj_i, 1).to(torch.float32)
+            selected_categories[idxs].view(batch_size, self.max_obj_i, 1).to(torch.float32)
         )
         det_mask = (
             masks_preds[idxs]
-            .view(boxes.shape[0], self.max_obj_i, self.mask_resolution * self.mask_resolution)
+            .view(batch_size, self.max_obj_i, self.mask_resolution * self.mask_resolution)
             .to(torch.float32)
         )
-        # det_attn[X, obj_idxs] = selected_attn
         return num_det, det_boxes, det_scores, det_classes, det_mask
-        # return num_det.to(torch.int32), det_boxes, det_scores, det_classes, det_attn, bases
 
 
 class End2EndMask(nn.Module):
@@ -809,6 +797,7 @@ class End2EndMask(nn.Module):
         mask_resolution=56,
         num_base=5,
         pooler_scale=0.25,
+        sampling_ratio=0,
     ):
         super().__init__()
         device = device if device else torch.device("cpu")
@@ -827,6 +816,7 @@ class End2EndMask(nn.Module):
             mask_resolution=mask_resolution,
             num_base=num_base,
             pooler_scale=pooler_scale,
+            sampling_ratio=sampling_ratio,
         )
         self.end2end.eval()
 
