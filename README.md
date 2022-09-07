@@ -12,11 +12,11 @@ This implimentation is based on [yolov7](https://github.com/WongKinYiu/yolov7/tr
 
 ### Export to onnx
 
-- `python3 export.py --weights weights/yolov7-mask.pt --img-size 640 640 --batch-size 1 --grid --end2end --max-wh 640 --simplify --mask --cleanup --topk-all 100 --iou-thres 0.65 --conf-thres 0.35`
+- `python3 export.py --weights weights/yolov7-mask.pt --img-size 640 640 --batch-size 1 --end2end --max-wh 640 --simplify --cleanup --topk-all 100 --iou-thres 0.65 --conf-thres 0.35`
 
 ### Export to tensorRT
 
-- `python3 export.py --weights weights/yolov7-mask.pt --img-size 640 640 --batch-size 1 --grid --end2end --max-wh 640 --simplify --mask --cleanup --topk-all 100 --iou-thres 0.65 --conf-thres 0.35 --trt --dynamic-batch`
+- `python3 export.py --weights weights/yolov7-mask.pt --img-size 640 640 --batch-size 1 --end2end --max-wh 640 --simplify --cleanup --topk-all 100 --iou-thres 0.65 --conf-thres 0.35 --trt --dynamic-batch`
 
 - `/usr/src/tensorrt/bin/trtexec --onnx=./weights/yolov7-mask.onnx --saveEngine=./weights/yolov7-mask-nms.trt --workspace=8192 --fp16 --minShapes=images:1x3x640x640 --optShapes=images:1x3x640x640 --maxShapes=images:8x3x640x640 --shapes=images:1x3x640x640`
 
@@ -37,3 +37,5 @@ This implimentation is based on [yolov7](https://github.com/WongKinYiu/yolov7/tr
 ## TODO
 
 - ONNX::RoiAlign coordinate_transformation_mode
+- Remove --grid
+-- 
