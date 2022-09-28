@@ -55,7 +55,7 @@ if __name__ == "__main__":
     parser.add_argument("--mask-resolution", type=int, default=56, help="mask-resolution")
     parser.add_argument("--num-base", type=int, default=5, help="num-base")
     parser.add_argument("--pooler-scale", type=float, default=0.25, help="RoiAlign: scale")
-    parser.add_argument("--sampling-ratio", type=int, default=0, help="RoiAlign: sampling-ratio")
+    parser.add_argument("--sampling-ratio", type=int, default=1, help="RoiAlign: sampling-ratio")
 
     opt = parser.parse_args()
 

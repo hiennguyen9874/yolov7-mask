@@ -37,5 +37,3 @@ This implimentation is based on [yolov7](https://github.com/WongKinYiu/yolov7/tr
 ## TODO
 
 - ONNX::RoiAlign coordinate_transformation_mode
-- Remove --grid
--- 

@@ -454,7 +454,6 @@ class MT(nn.Module):
                 output["attn"] = torch.cat(za, 1)
             if self.mask_iou:
                 output["mask_iou"] = torch.cat(zi, 1).sigmoid()
-
         else:
             if self.attn is not None:
                 output["attn"] = attn
@@ -471,7 +470,6 @@ class MT(nn.Module):
                 output["attn"],
                 torch.cat((output["bases"], output["sem"]), dim=1),
             )
-
         return output
 
     @staticmethod

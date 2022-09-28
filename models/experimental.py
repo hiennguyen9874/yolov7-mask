@@ -103,9 +103,9 @@ class ORT_NMS(torch.autograd.Function):
         device = boxes.device
         batch = scores.shape[0]
         num_det = random.randint(0, 100)
-        batches = torch.randint(0, batch, (num_det,)).sort()[0].to(device)
-        idxs = torch.arange(100, 100 + num_det).to(device)
-        zeros = torch.zeros((num_det,), dtype=torch.int64).to(device)
+        batches = torch.randint(0, batch, (num_det,), device=device).sort()[0]
+        idxs = torch.arange(100, 100 + num_det, device=device)
+        zeros = torch.zeros((num_det,), dtype=torch.int64, device=device)
         selected_indices = torch.cat([batches[None], zeros[None], idxs[None]], 0).T.contiguous()
         selected_indices = selected_indices.to(torch.int64)
         return selected_indices
@@ -144,12 +144,16 @@ class TRT_NMS(torch.autograd.Function):
         score_threshold=0.25,
         box_coding=1,
     ):
+        device = boxes.device
+        dtype = boxes.dtype
         batch_size, num_boxes, num_classes = scores.shape
-        num_det = torch.randint(0, max_output_boxes, (batch_size, 1), dtype=torch.int32)
-        det_boxes = torch.randn(batch_size, max_output_boxes, 4)
-        det_scores = torch.randn(batch_size, max_output_boxes)
+        num_det = torch.randint(
+            0, max_output_boxes, (batch_size, 1), device=device, dtype=torch.int32
+        )
+        det_boxes = torch.randn(batch_size, max_output_boxes, 4, device=device, dtype=dtype)
+        det_scores = torch.randn(batch_size, max_output_boxes, device=device, dtype=dtype)
         det_classes = torch.randint(
-            0, num_classes, (batch_size, max_output_boxes), dtype=torch.int32
+            0, num_classes, (batch_size, max_output_boxes), device=device, dtype=torch.int32
         )
         return num_det, det_boxes, det_scores, det_classes
 
@@ -175,6 +179,7 @@ class TRT_NMS(torch.autograd.Function):
             max_output_boxes_i=max_output_boxes,
             score_activation_i=score_activation,
             score_threshold_f=score_threshold,
+            outputs=4,
         )
         nums, boxes, scores, classes = out
         return nums, boxes, scores, classes
@@ -218,9 +223,9 @@ class ONNX_ORT(nn.Module):
             nmsbox, max_score_tp, self.max_obj, self.iou_threshold, self.score_threshold
         )
         X, Y = selected_indices[:, 0], selected_indices[:, 2]
-        selected_boxes = boxes[X, Y, :]
-        selected_categories = category_id[X, Y, :].float()
-        selected_scores = max_score[X, Y, :]
+        selected_boxes = boxes[X, Y]
+        selected_categories = category_id[X, Y].float()
+        selected_scores = max_score[X, Y]
         X = X.unsqueeze(1).float()
         return torch.cat([X, selected_boxes, selected_categories, selected_scores], 1)
 
@@ -292,9 +297,11 @@ class ORT_RoiAlign(torch.autograd.Function):
         # coordinate_transformation_mode="output_half_pixel",
         mode="avg",
     ):
+        device = rois.device
+        dtype = rois.dtype
         N, C, H, W = X.shape
         num_rois = rois.shape[0]
-        return torch.randn((num_rois, C, output_height, output_width))
+        return torch.randn((num_rois, C, output_height, output_width), device=device, dtype=dtype)
 
     @staticmethod
     def symbolic(
@@ -385,10 +392,10 @@ class ONNX_ORT_MASK(nn.Module):
         )
         total_object = selected_indices.shape[0]
         X, Y = selected_indices[:, 0], selected_indices[:, 2]
-        selected_boxes = boxes[X, Y, :]
-        selected_categories = category_id[X, Y, :].float()
-        selected_scores = max_score[X, Y, :]
-        selected_attn = attn[X, Y, :]
+        selected_boxes = boxes[X, Y]
+        selected_categories = category_id[X, Y].float()
+        selected_scores = max_score[X, Y]
+        selected_attn = attn[X, Y]
 
         pooled_bases = ORT_RoiAlign.apply(
             bases,
@@ -432,9 +439,9 @@ class TRT_NMS2(torch.autograd.Function):
         device = boxes.device
         batch = scores.shape[0]
         num_det = random.randint(0, 100)
-        batches = torch.randint(0, batch, (num_det,)).sort()[0].to(device)
-        idxs = torch.arange(100, 100 + num_det).to(device)
-        zeros = torch.zeros((num_det,), dtype=torch.int64).to(device)
+        batches = torch.randint(0, batch, (num_det,), device=device).sort()[0]
+        idxs = torch.arange(100, 100 + num_det, device=device)
+        zeros = torch.zeros((num_det,), dtype=torch.int64, device=device)
         selected_indices = torch.cat([batches[None], zeros[None], idxs[None]], 0).T.contiguous()
         selected_indices = selected_indices.to(torch.int64)
         return_selected_indices = torch.zeros(
@@ -460,6 +467,7 @@ class TRT_NMS2(torch.autograd.Function):
             iou_threshold_f=iou_threshold,
             max_output_boxes_per_class_i=max_output_boxes_per_class,
             center_point_box_i=0,
+            outputs=1,
         )
 
 
@@ -478,9 +486,9 @@ class TRT_NMS3(torch.autograd.Function):
         device = boxes.device
         batch = scores.shape[0]
         num_det = random.randint(0, 100)
-        batches = torch.randint(0, batch, (num_det,)).sort()[0].to(device)
-        idxs = torch.arange(100, 100 + num_det).to(device)
-        zeros = torch.zeros((num_det,), dtype=torch.int64).to(device)
+        batches = torch.randint(0, batch, (num_det,), device=device).sort()[0]
+        idxs = torch.arange(100, 100 + num_det, device=device)
+        zeros = torch.zeros((num_det,), dtype=torch.int64, device=device)
         selected_indices = torch.cat([batches[None], zeros[None], idxs[None]], 0).T.contiguous()
         selected_indices = selected_indices.to(torch.int64)
         return_selected_indices = torch.zeros(
@@ -516,16 +524,18 @@ class TRT_RoiAlign(torch.autograd.Function):
         ctx,
         X,
         rois,
-        output_height=56,
-        output_width=56,
-        spatial_scale=0.25,
-        sampling_ratio=1,
+        output_height,
+        output_width,
+        spatial_scale,
+        sampling_ratio,
         aligned=1,
         mode="avg",
     ):
+        device = rois.device
+        dtype = rois.dtype
         N, C, H, W = X.shape
         num_rois = rois.shape[0]
-        return torch.randn((num_rois, C, output_height, output_width))
+        return torch.randn((num_rois, C, output_height, output_width), device=device, dtype=dtype)
 
     @staticmethod
     def symbolic(
@@ -540,7 +550,7 @@ class TRT_RoiAlign(torch.autograd.Function):
         mode="avg",
     ):
         return g.op(
-            "TRT::RoIAlignDynamic",
+            "TRT::RoIAlignDynamic_TRT",
             X,
             rois,
             output_height_i=output_height,
@@ -549,6 +559,7 @@ class TRT_RoiAlign(torch.autograd.Function):
             sampling_ratio_i=sampling_ratio,
             mode_s=mode,
             aligned_i=aligned,
+            outputs=1,
         )
 
 
@@ -569,7 +580,8 @@ class ONNX_TRT_MASK(nn.Module):
         device=None,
     ):
         super().__init__()
-        assert max_wh is not None
+        self.type_nms_padding = 1  # or 1, or 2
+
         self.device = device if device else torch.device("cpu")
         self.max_wh = max_wh
         self.max_obj_i = max_obj
@@ -670,38 +682,42 @@ class ONNX_TRT_MASK(nn.Module):
             .sigmoid()
         )
 
-        # If sum(axis=1) is zero
-        num_object1 = (
-            torch.topk(
-                torch.where(
-                    selected_indices.sum(dim=1) > 0,
-                    torch.arange(0, total_object, 1, device=self.device, dtype=torch.int32),
-                    torch.zeros(total_object, device=self.device, dtype=torch.int32),
-                ).to(torch.float),
-                k=1,
-                largest=True,
-            )[1]
-            + 1
-        ).reshape((1,))
+        if self.type_nms_padding == 0 or self.type_nms_padding == 2:
+            # If sum(axis=1) is zero
+            num_object1 = (
+                torch.topk(
+                    torch.where(
+                        selected_indices.sum(dim=1) > 0,
+                        torch.arange(0, total_object, 1, device=self.device, dtype=torch.int32),
+                        torch.zeros(total_object, device=self.device, dtype=torch.int32),
+                    ).to(torch.float),
+                    k=1,
+                    largest=True,
+                )[1]
+                + 1
+            ).reshape((1,))
+            num_object = num_object1
+        elif self.type_nms_padding == 1 or self.type_nms_padding == 2:
+            # Check lag not change
+            selected_indices_lag = (selected_indices[1:] - selected_indices[:-1]).sum(dim=1)
+            num_object2 = (
+                torch.topk(
+                    torch.where(
+                        selected_indices_lag != 0,
+                        torch.arange(0, total_object - 1, device=self.device, dtype=torch.int32),
+                        torch.zeros((1,), device=self.device, dtype=torch.int32),
+                    ).to(torch.float),
+                    k=1,
+                    largest=True,
+                )[1]
+                + 2
+            ).reshape((1,))
+            num_object = num_object2
 
-        # Check lag not change
-        selected_indices_lag = (selected_indices[1:] - selected_indices[:-1]).sum(dim=1)
-        num_object2 = (
-            torch.topk(
-                torch.where(
-                    selected_indices_lag != 0,
-                    torch.arange(0, total_object - 1, device=self.device, dtype=torch.int32),
-                    torch.zeros((1,), device=self.device, dtype=torch.int32),
-                ).to(torch.float),
-                k=1,
-                largest=True,
-            )[1]
-            + 2
-        ).reshape((1,))
-
-        num_object = (selected_indices_lag.sum() != 0).to(torch.float32) * torch.min(
-            num_object1, num_object2
-        )
+        if self.type_nms_padding == 2:
+            num_object = (selected_indices_lag.sum() != 0).to(torch.float32) * torch.min(
+                num_object1, num_object2
+            )
 
         batch_indices_per_batch = torch.where(
             (
@@ -781,6 +797,230 @@ class ONNX_TRT_MASK(nn.Module):
         return num_det, det_boxes, det_scores, det_classes, det_mask
 
 
+class TRT_NMS4(torch.autograd.Function):
+    """TensorRT NMS operation"""
+
+    @staticmethod
+    def forward(
+        ctx,
+        boxes,
+        scores,
+        background_class=-1,
+        iou_threshold=0.45,
+        max_output_boxes=100,
+        score_activation=0,
+        score_threshold=0.25,
+        box_coding=1,
+    ):
+        device = boxes.device
+        dtype = boxes.dtype
+
+        batch_size, num_boxes, num_classes = scores.shape
+        num_det = torch.randint(
+            0, max_output_boxes, (batch_size, 1), device=device, dtype=torch.int32
+        )
+        det_boxes = torch.randn(batch_size, max_output_boxes, 4, device=device, dtype=dtype)
+        det_scores = torch.randn(batch_size, max_output_boxes, device=device, dtype=dtype)
+        det_classes = torch.randint(
+            0, num_classes, (batch_size, max_output_boxes), device=device, dtype=torch.int32
+        )
+        det_indices = torch.randint(
+            0,
+            num_boxes,
+            (batch_size, max_output_boxes),
+            device=device,
+            dtype=torch.int32,
+        )
+        return num_det, det_boxes, det_scores, det_classes, det_indices
+
+    @staticmethod
+    def symbolic(
+        g,
+        boxes,
+        scores,
+        background_class=-1,
+        iou_threshold=0.45,
+        max_output_boxes=100,
+        score_activation=0,
+        score_threshold=0.25,
+        box_coding=1,
+    ):
+        out = g.op(
+            "TRT::EfficientNMSCustom_TRT",
+            boxes,
+            scores,
+            background_class_i=background_class,
+            box_coding_i=box_coding,
+            iou_threshold_f=iou_threshold,
+            max_output_boxes_i=max_output_boxes,
+            score_activation_i=score_activation,
+            score_threshold_f=score_threshold,
+            outputs=5,
+        )
+        num_det, det_boxes, det_scores, det_classes, det_indices = out
+        return num_det, det_boxes, det_scores, det_classes, det_indices
+
+
+class TRT_ROIAlign2(torch.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        feature_map,
+        roi,
+        pooled_size=56,
+        image_size=640,
+        sampling_ratio=1,
+        roi_coords_absolute=1,
+        roi_coords_swap=0,
+        roi_coords_transform=2,
+        legacy=0,
+    ):
+        device = roi.device
+        dtype = roi.dtype
+        ROI_N, ROI_R, ROI_D = roi.shape
+        F_N, F_C, F_H, F_W = feature_map.shape
+        assert ROI_N == F_N
+        return torch.randn(
+            (ROI_N, ROI_R, F_C, pooled_size, pooled_size), device=device, dtype=dtype
+        )
+
+    @staticmethod
+    def symbolic(
+        g,
+        feature_map,
+        roi,
+        pooled_size=56,
+        image_size=640,
+        sampling_ratio=1,
+        roi_coords_absolute=1,
+        roi_coords_swap=0,
+        roi_coords_transform=2,
+        legacy=0,
+    ):
+        return g.op(
+            "TRT::RoIAlign2Dynamic_TRT",
+            feature_map,
+            roi,
+            pooled_size_i=pooled_size,
+            sampling_ratio_i=sampling_ratio,
+            roi_coords_absolute_i=roi_coords_absolute,
+            roi_coords_swap_i=roi_coords_swap,
+            roi_coords_transform_i=roi_coords_transform,
+            image_size_i=image_size,
+            legacy_i=legacy,
+            outputs=1,
+        )
+
+
+class ONNX_TRT_MASK2(nn.Module):
+    """onnx module with TensorRT NMS operation."""
+
+    def __init__(
+        self,
+        max_obj=100,
+        iou_thres=0.45,
+        score_thres=0.25,
+        max_wh=None,
+        device=None,
+        image_size=640,
+        attn_resolution=14,
+        mask_resolution=56,
+        num_base=5,
+        pooler_scale=0.25,
+        sampling_ratio=0,
+        *args,
+        **kwargs,
+    ):
+        super().__init__()
+        self.device = device if device else torch.device("cpu")
+        self.background_class = (-1,)
+        self.iou_threshold = iou_thres
+        self.max_obj = max_obj
+        self.score_activation = 0
+        self.score_threshold = score_thres
+        self.image_size = image_size
+        self.attn_resolution = attn_resolution
+        self.mask_resolution = mask_resolution
+        self.num_base = num_base
+        self.pooler_scale = pooler_scale
+        self.sampling_ratio = sampling_ratio
+        self.roi_align_type = 2  # 1, or 2
+
+    def forward(self, x):
+        boxes = x[0][:, :, :4]
+        conf = x[0][:, :, 4:5]
+        scores = x[0][:, :, 5:]
+        attn = x[1]
+        bases = x[2]
+
+        batch_size = boxes.shape[0]
+        bases_dim = bases.shape[1]
+
+        scores *= conf
+        num_det, det_boxes, det_scores, det_classes, det_indices = TRT_NMS4.apply(
+            boxes,
+            scores,
+            self.background_class,
+            self.iou_threshold,
+            self.max_obj,
+            self.score_activation,
+            self.score_threshold,
+        )
+
+        # return num_det, det_boxes, det_scores, det_classes, det_indices, attn, bases
+
+        batch_indices = torch.ones_like(det_indices) * torch.arange(
+            batch_size, device=self.device, dtype=torch.int32
+        ).unsqueeze(1)
+
+        det_attn = attn[
+            batch_indices.view(batch_size * self.max_obj).to(torch.long),
+            det_indices.view(batch_size * self.max_obj).to(torch.long),
+        ].view(
+            batch_size, self.max_obj, self.num_base * self.attn_resolution * self.attn_resolution
+        )
+
+        if self.roi_align_type == 1:
+            pooled_bases = TRT_RoiAlign.apply(
+                bases,
+                torch.cat((batch_indices.unsqueeze(2).float(), det_boxes), dim=2).view(
+                    batch_size * self.max_obj, 5
+                ),
+                self.mask_resolution,
+                self.mask_resolution,
+                self.pooler_scale,
+                self.sampling_ratio,
+            )
+        else:
+            pooled_bases = TRT_ROIAlign2.apply(
+                bases,
+                det_boxes.view(batch_size, self.max_obj, 4),
+                self.mask_resolution,
+                self.image_size,
+            )
+
+        pooled_bases = pooled_bases.view(
+            (batch_size * self.max_obj, bases_dim, self.mask_resolution, self.mask_resolution)
+        )
+
+        det_attn = det_attn.view(
+            batch_size * self.max_obj, self.num_base, self.attn_resolution, self.attn_resolution
+        )
+
+        det_attn = F.interpolate(
+            det_attn, (self.mask_resolution, self.mask_resolution), mode="bilinear"
+        ).softmax(dim=1)
+
+        masks_preds = (
+            (pooled_bases * det_attn)
+            .sum(dim=1)
+            .view(batch_size, self.max_obj, self.mask_resolution * self.mask_resolution)
+            .sigmoid()
+        )
+
+        return num_det, det_boxes, det_scores, det_classes, masks_preds
+
+
 class End2EndMask(nn.Module):
     """export onnx or tensorrt model with NMS operation."""
 
@@ -805,7 +1045,7 @@ class End2EndMask(nn.Module):
 
         self.model = model.to(device)
         self.model.model[-1].end2end = True
-        self.patch_model = ONNX_TRT_MASK if trt else ONNX_ORT_MASK
+        self.patch_model = ONNX_TRT_MASK2 if trt else ONNX_ORT_MASK
         self.end2end = self.patch_model(
             max_obj=max_obj,
             iou_thres=iou_thres,
